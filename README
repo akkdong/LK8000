@@ -84,3 +84,19 @@ Desktop Target ( LINUX or PC ) :
     FULLSCREEN=[y|n]
         default = "n"
 
+
+
+---------------------------------------------------------------------------------
+Update build methods
+
+1. change Kobo toolchain : arm-unknown-linux-gnueabi --> arm-linux-gnueabihf
+   --> install g++-8-arm-linux-gnueabihf
+		$ sudo apt install g++-8-arm-linux-gnueabihf
+   --> make symbolic link
+		$ mkdir ~/bin
+		$ ln -s /usr/bin/arm-linux-gnueabihf-gcc ~/bin/arm-linux-gnueabihf-gcc
+		$ ln -s /usr/bin/arm-linux-gnueabihf-g++ ~/bin/arm-linux-gnueabihf-g++
+		$ export PATH=~/bin:$PATH
+		
+2. build libraries for KOBO & PC
+	--> run Scripts/kobo-toolchain-install-local.sh & Scripts/toolchain-mingw-w64-local.sh

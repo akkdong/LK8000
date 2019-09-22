@@ -9,7 +9,7 @@ FONTS_NAMES =	DejaVuSansCondensed \
 	
 FONTS_FILES = $(patsubst %,$(FONTS_DIR)/%.ttf,$(FONTS_NAMES))
 
-SYSROOT = $(shell $(CC) -print-sysroot)
+SYSROOT = $(shell $(CC) -print-sysroot)usr/arm-linux-gnueabihf
 
 # install our version of the system libraries in /opt/LK8000/lib; this
 # is necessary because:
