@@ -178,7 +178,7 @@ else ifeq ($(CONFIG_WINE),y)
  CPU    :=i586
  MCPU   := -mcpu=$(CPU)
 else ifeq ($(TARGET_IS_KOBO),y)
- TCPATH := arm-linux-gnueabihf
+ TCPATH := arm-linux-gnueabihf-
 else ifeq ($(HOST_IS_PI)$(TARGET_IS_PI),ny)
  TCPATH := arm-linux-gnueabihf-
  MCPU   := -mtune=cortex-a7 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -ftree-vectorize
