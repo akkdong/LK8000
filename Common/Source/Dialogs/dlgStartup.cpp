@@ -397,7 +397,7 @@ static void OnPILOTClicked(WndButton* pWnd) {
   }
 }
 
-#ifdef KOBO
+#ifdef KOBO_REMOVE
 static void OnNickelClick(WndButton* pWnd) {
   RUN_MODE = RUN_EXIT;
   RestartToNickel = true;
@@ -436,7 +436,7 @@ static WndForm* InitFlySim() {
 
         if (ScreenLandscape) {
 
-#ifdef KOBO
+#ifdef KOBO_REMOVE
             const unsigned int SPACEBORDER = 1;
             const unsigned int w = (ScreenSizeX - (SPACEBORDER * 6)) / 5;
 #else
@@ -451,7 +451,7 @@ static WndForm* InitFlySim() {
                 pWnd->SetLeft(lx);
             }
 
-#ifdef KOBO
+#ifdef KOBO_REMOVE
             lx += w + SPACEBORDER;
             WndButton* pWndNickel = new WndButton(pWndForm, _T("cmdNICKEL"), _T("KOBO"), lx , IBLSCALE(205), w, IBLSCALE(30), &OnNickelClick );
             if(pWndNickel) {
@@ -470,7 +470,7 @@ static WndForm* InitFlySim() {
             if(pWnd) {
                 pWnd->SetWidth(w);
                 pWnd->SetLeft(lx);
-#ifdef KOBO
+#ifdef KOBO_REMOVE
                 pWnd->SetCaption(MsgToken(1901)); // POWER OFF
 #endif
             }
@@ -505,7 +505,7 @@ static WndForm* InitFlySim() {
             }
 
 
-#ifdef KOBO
+#ifdef KOBO_REMOVE
             lx = SPACEBORDER - 1; // count from 0
 
             WndButton* pWndNickel = new WndButton(pWndForm, _T("cmdNICKEL"), _T("KOBO"), lx , h, w, IBLSCALE(40), &OnNickelClick );
@@ -536,7 +536,7 @@ static WndForm* InitFlySim() {
                 pWnd->SetLeft(lx);
                 pWnd->SetHeight(IBLSCALE(40));
                 pWnd->SetWidth(w);
-#ifdef KOBO
+#ifdef KOBO_REMOVE
                 pWnd->SetCaption(MsgToken(1901)); // POWER OFF
 #endif
             }

@@ -705,7 +705,7 @@ int main(int argc, char *argv[]) {
 
   Shutdown();
   pSaveScreen = nullptr;
-#ifdef KOBO
+#ifdef KOBO_REMOVE
   extern bool RestartToNickel;
   if(RestartToNickel) {
     KoboExecNickel();

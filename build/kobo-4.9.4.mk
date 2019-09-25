@@ -107,6 +107,7 @@ Kobo-install.zip: $(BIN)/std/.kobo/KoboRoot.tgz
 	@$(NQ)echo "  Zip     $@"
 	$(Q)cd $(BIN)/std/ && zip -q $@ .kobo/KoboRoot.tgz
 	$(Q)cp $(BIN)/std/$@ $@
+	$(Q)gunzip -c $(BIN)/std/.kobo/KoboRoot.tgz | tar --delete ./etc/inittab | gzip > KoboRoot-LK8000.tgz
 
 
 # /mnt/onboard/.kobo/KoboRoot.tgz is a file that is picked up by
