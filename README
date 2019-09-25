@@ -100,3 +100,13 @@ Update build methods
 		
 2. build libraries for KOBO & PC
 	--> run Scripts/kobo-toolchain-install-local.sh & Scripts/toolchain-mingw-w64-local.sh
+
+**** arm-linux-gnueabihf-gcc-8 not work properly --> install alternate toolchain & use it!!
+ - wget https://github.com/kobolabs/Kobo-Reader/raw/master/toolchain/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf.tar.xz
+ - tar xJf gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf.tar.xz -C ~/bin
+ - mv ~/bin/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf ~/bin/x-tools
+ - export PATH=~/bin/x-tools/bin:$PATH
+
+ - cd ~/src/LK8000
+ - make TARGET=KOBO -f Makefile-4.9.4
+ 
