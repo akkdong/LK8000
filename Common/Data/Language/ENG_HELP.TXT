@@ -4,7 +4,7 @@
 # An entire help can be max 1024 characters total
 
 #
-# SYSTEM CONFIGURATION 
+# SYSTEM CONFIGURATION
 
 @100
 Sets the level of detail of the configuration settings.
@@ -12,7 +12,7 @@ Sets the level of detail of the configuration settings.
 [Expert]: Basic and advanced settings are shown.
 
 @101
-The name of the file containing TOPOLOGY, and only optionally also terrain, waypoints, airspaces. 
+The name of the file containing TOPOLOGY, and only optionally also terrain, waypoints, airspaces.
 The .LKM is really a ZIP file, renamed. If you change suffix to ZIP you can open it and change contents.
 Map files are located inside the _Maps subfolder.
 
@@ -105,7 +105,7 @@ Determines how labels are displayed with each waypoint:
 [Names in task] Names are only displayed for waypoints that are in the active task as well as the home airfield.
 [First Three] The first 3 letters of the waypoint name are displayed.
 [First Five] The first 5 letters of the waypoint name are displayed.
-[ICAO Code] The ICAO airfield letter code (e.g. ‎EGLL for London Heathrow)
+[ICAO Code] The ICAO airfield letter code (e.g. EGLL for London Heathrow)
 
 @124
 Determines whether and how long a snail trail is drawn behind the glider
@@ -1014,7 +1014,6 @@ Ground speed measured by the GPS.  If this infobox is active in simulation mode,
 Total altitude gain/loss in the last thermal divided by the time spent circling.
 
 @808
-
 [Last Thermal Gain]
 Total altitude gain/loss in the last thermal.
 
@@ -1708,6 +1707,9 @@ In airspace warning dialog, you can see a decrementing counter on the close butt
 [Airspace warning map labels]
 If this is on, airspace warning labels shows on the map indicating airspace name and vertical distance.
 
+@1213
+Deprecated
+
 @1214
 [Autozoom threshold]
 When using autozoom , autozoom gets working only if the next waypoint gets closer than this limit.
@@ -1839,7 +1841,7 @@ adjust the big FAI 28%/45% triangle threshold
 
 @1269
 [Gear Warning]
-Off:         
+Off:
 no Gear warning
 
 Landables:  (recommended in mountains)
@@ -1848,7 +1850,7 @@ Gear warning if altitude lower than set height above best alternate field elevat
 Always:  (recommended  in flat lands)
 Gear warning always if altitude above ground level (AGL) lower than set height
 
-The warning will be shown only once if below gear warning set height, and will only be re-enabled after climbing 100m (300ft) above set  height.”
+The warning will be shown only once if below gear warning set height, and will only be re-enabled after climbing 100m (300ft) above set  height.
 
 
 @1270
@@ -1994,6 +1996,30 @@ Show on the map the FAI Assistant sectors. To be able to see it make sure that t
 @1302
 [Draw XC Triangle]
 Show on the map the best cross country triangle according to the contest rule set in system menu 22. To be able to see it make sure that at least one Contest rule is active in Contest setting on page 22
+
+
+@1303
+[Data exchange options]
+Select which data is received or transmitted to external devices. 
+OFF     no data exchange
+IN      receive data from external device
+OUT     send data to external device
+IN/OUT  bi-directional data exchange
+Note: some data can only be received others can be transmitted. Only a few devices allow bi-directional exchange of some parameters (e.g. MC).
+MC      MacCready
+BAL     Ballast 
+BUGS    Bugs on wings in % glide ratio (100% = Clean optimal wings)
+STF-SW  Vario Speed to Fly (Sollfahrt) Switch
+WIND    wind speed and direction
+BARO    Barometric altitude
+SPEED   Indicated airspeed (STaudruck)
+VARIO   Variometer sink/climb rate
+TARGET  Information about navigation target (waypoint)
+G-FORCE 3 Axis g-maeter values
+OAT     outside air temperature
+BAT1    first external battery voltage
+BAT2    second external battery voltage  
+POLAR   polar coefficients
 
 
 @9999

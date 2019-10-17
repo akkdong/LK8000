@@ -4,7 +4,7 @@ project(assembler C CXX ASM)
 
 include(ExternalProject)
 
-set(GEOGRAPHIC_PREFIX ${CMAKE_CURRENT_LIST_DIR}/android-studio/app/Thirdparty/GeographicLib)
+set(GEOGRAPHIC_PREFIX ${CMAKE_CURRENT_LIST_DIR}/android-thirdparty/GeographicLib)
 set(GEOGRAPHIC_INCLUDE ${GEOGRAPHIC_PREFIX}/lib/${ANDROID_ABI}/include)
 set(GEOGRAPHIC_LIB ${GEOGRAPHIC_PREFIX}/lib/${ANDROID_ABI}/lib/libGeographic.a)
 
@@ -48,7 +48,7 @@ add_custom_target(
     DEPENDS ${GEOGRAPHIC_LIB}
 )
 
-set(BOOST_PREFIX ${CMAKE_CURRENT_LIST_DIR}/android-studio/app/Thirdparty/boost)
+set(BOOST_PREFIX ${CMAKE_CURRENT_LIST_DIR}/android-thirdparty/boost)
 
 ExternalProject_Add (
     boost
@@ -694,6 +694,7 @@ add_library( LK8000 SHARED
     Common/Source/Dialogs/dlgProgress.cpp
     Common/Source/Dialogs/dlgFlarmIGCDownload.cpp
     Common/Source/Dialogs/dlgIGCProgress.cpp
+	Common/Source/Dialogs/dlgLXIGCDownload.cpp
 
     Common/Source/Dialogs/Analysis/DrawOtherFunctions.cpp
     Common/Source/Dialogs/Analysis/DrawXYGrid.cpp
