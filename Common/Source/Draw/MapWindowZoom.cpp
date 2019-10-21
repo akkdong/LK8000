@@ -14,13 +14,11 @@
 MapWindow::Zoom::Zoom():
   _bMapScale (true),
   _inited(false),
-  _autoZoom(false), _circleZoom(true), _bigZoom(false),
-  _scale(0), _realscale(0),  _requestedScale(&_modeScale[SCALE_CRUISE]),
-  _scaleOverDistanceModify(0),
+  _autoZoom(false), _circleZoom(true),
+  _scale(0), _realscale(0), _modeScale(),
+  _requestedScale(&_modeScale[SCALE_CRUISE]),
   _resScaleOverDistanceModify(0)
 {
-  for(unsigned i=0; i<SCALE_NUM; i++)
-    _modeScale[i] = 0;
 }
 
 
@@ -54,56 +52,41 @@ void MapWindow::Zoom::CalculateAutoZoom() {
     }
     _modeScale[SCALE_CRUISE] = LimitMapScale(wpd * DISTANCEMODIFY / AutoZoomFactor);
   } else {
-    _modeScale[SCALE_CRUISE] = GetZoomInitValue(CruiseZoom) / 1.4;
+    _modeScale[SCALE_CRUISE] = GetZoomInitValue(CruiseZoom);
   }
 
 }
 
-double MapWindow::Zoom::GetZoomInitValue(int parameter_number) const
-{
+double MapWindow::Zoom::GetZoomInitValue(int parameter_number) const {
   // Initial cruise/Climb zoom map scales. Parameter number equal to config dlg item index
   // Values are given in user units, km or mi what is selected.
   // These values used to select the best available mapscale from scalelist. See MapWindow::FillScaleListForEngineeringUnits(
 
   switch (Units::GetUserDistanceUnit()) {
     default:
-        return ScaleListArrayMeters[parameter_number];
-      break;
+      return ScaleListArrayMeters[parameter_number];
     case unStatuteMiles:
       return ScaleListArrayStatuteMiles[parameter_number];
-      break;
     case unNauticalMiles:
       return ScaleListNauticalMiles[parameter_number];
-      break;
-  } //sw units
-
-
+  }
 }
-
 /**
  * @brief Resets Map Zoom to initial values
  */
 void MapWindow::Zoom::Reset()
 {
-  const double SCALE_PANORAMA_INIT    = 10.0;
+  constexpr double SCALE_PANORAMA_INIT    = 10.0;
 
   _modeScale[SCALE_CRUISE]   = GetZoomInitValue(CruiseZoom);
   _modeScale[SCALE_CIRCLING] = GetZoomInitValue(ClimbZoom);
   _modeScale[SCALE_PANORAMA] = SCALE_PANORAMA_INIT;
-
-  // Correct _modeScale[] values for internal use
-  // You have to give values in user units (km,mi, what is selected), we need to divide it by 1.4
-  // because of the size of the mapscale symbol
-  _modeScale[SCALE_CRUISE]   /= 1.4;
-  _modeScale[SCALE_CIRCLING] /= 1.4;
-  _modeScale[SCALE_PANORAMA] /= 1.4;
 
   if(_autoZoom)
     _modeScale[SCALE_AUTO_ZOOM] = _modeScale[SCALE_CRUISE];
 
   _requestedScale = &_modeScale[SCALE_CRUISE];
   _scale = *_requestedScale;
-  _scaleOverDistanceModify = *_requestedScale / DISTANCEMODIFY;
   _realscale = *_requestedScale/DISTANCEMODIFY/1000;
 
   _inited = true;
@@ -302,28 +285,26 @@ void MapWindow::Zoom::UpdateMapScale()
 void MapWindow::Zoom::ModifyMapScale()
 {
   // limit zoomed in so doesn't reach silly levels
-  if(_bMapScale)
+  if(_bMapScale) {
     *_requestedScale = LimitMapScale(*_requestedScale); // FIX VENTA remove limit
-  _scaleOverDistanceModify = *_requestedScale / DISTANCEMODIFY;
-  LKASSERT(_scaleOverDistanceModify!=0);
-  _resScaleOverDistanceModify = GetMapResolutionFactor() / _scaleOverDistanceModify;
-  _drawScale = _scaleOverDistanceModify;
-  _drawScale = _drawScale / 111194;
-  LKASSERT(_drawScale!=0);
-  _drawScale = GetMapResolutionFactor() / _drawScale;
+  }
+
+  const double mapFactor = GetMapResolutionFactor();
+  const double scaleOverDistanceModify = *_requestedScale / DISTANCEMODIFY;
+
+  _resScaleOverDistanceModify = mapFactor / scaleOverDistanceModify;
+  _drawScale = mapFactor / (scaleOverDistanceModify / 111194); // what is this const value ?
   _invDrawScale = 1.0 / _drawScale;
   _scale = *_requestedScale;
-  _realscale = *_requestedScale/DISTANCEMODIFY/1000;
+  _realscale = *_requestedScale / DISTANCEMODIFY / 1000;
 }
 
 
 bool MapWindow::Zoom::GetInitMapScaleText(int init_parameter, TCHAR *out, size_t size) const
 {
   double mapscale = GetZoomInitValue(init_parameter);
-  //double mapscale = ScaleList[init_parameter];
-
   // Get nearest discrete value
-  double ms = MapWindow::FindMapScale(mapscale/1.4)*1.4;
+  double ms = MapWindow::FindMapScale(mapscale);
   return Units::FormatUserMapScale(NULL, Units::ToSysDistance(ms), out, size);
 }
 

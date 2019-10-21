@@ -14,12 +14,12 @@
 #include "Multimap.h"
 #include "../Draw/ScreenProjection.h"
 #include "NavFunctions.h"
-
-//#define DRAW_TIMER
-
 #include "ColorRamps.h"
 #include "Kobo/Model.hpp"
 #include "Util/Clamp.hpp"
+#include "Asset.hpp"
+#include <utility>
+#include "../utils/make_unique.h"
 
 #if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(OPENVARIO)
 #include <arm_neon.h>
@@ -149,13 +149,15 @@ inline T TerrainShading(const int16_t illum, const T& color) {
 
   constexpr uint32_t interp_level = 128;
 
-  if (illum < 0) { // shadow to blue
+  if (illum < 0) {
+    // shadow to "tshadow.color"
     const uint32_t x = std::min<uint32_t>(tshadow.height, -illum);
     return linear_interpolation<interp_level>(color, tshadow.color, x);
-  } else if (illum > 0) { // highlight to yellow
+  } else if (illum > 0) {
+    // highlight "thighlight.color"
     if (thighlight.height != 255) {
       const uint32_t x = std::min<uint32_t>(thighlight.height, illum / 2);
-      return linear_interpolation<interp_level>(color, tshadow.color, x);
+      return linear_interpolation<interp_level>(color, thighlight.color, x);
     }
   }
   return color;
@@ -326,6 +328,8 @@ private:
 #endif
 
     int16_t *height_buffer;
+    std::unique_ptr<uint8_t[]> prev_iso_band;
+    std::unique_ptr<uint8_t[]> current_iso_band;
 
     BGRColor color_table[128][256];
 
@@ -377,10 +381,10 @@ public:
 
         double X, Y;
 
-        const int X0 = (unsigned int) (dtquant / 2);
-        const int Y0 = (unsigned int) (dtquant / 2);
-        const int X1 = (unsigned int) (X0 + dtquant * ixs);
-        const int Y1 = (unsigned int) (Y0 + dtquant * iys);
+        const int X0 = dtquant / 2;
+        const int Y0 = dtquant / 2;
+        const int X1 = X0 + dtquant * ixs;
+        const int Y1 = Y0 + dtquant * iys;
 
         double pixelDX, pixelDY;
 
@@ -504,9 +508,9 @@ public:
         if (TerrainRamp == 13) { // GA Relative
             if (!GPS_INFO.NAVWarning) {
                 if (CALCULATED_INFO.Flying) {
-                    height_min = (int16_t) GPS_INFO.Altitude - 150; // 500ft
+                    height_min = static_cast<int16_t>(GPS_INFO.Altitude - 150); // 500ft
                 } else {
-                    height_min = (int16_t) GPS_INFO.Altitude + 100; // 330ft
+                    height_min = static_cast<int16_t>(GPS_INFO.Altitude + 100); // 330ft
                 }
             } else {
                 height_min += 150;
@@ -660,8 +664,6 @@ public:
 
                 assert(x+3 < ixs);
             }
-
-
             // right side
             {
                 const int16x4_t right = vmov_n_s16(*(curr_row + ixs - 1));
@@ -711,16 +713,39 @@ public:
             return;
         }
 
+        const int16x8_t qheight_0 = vmovq_n_s16(0);
+        const int16x8_t qheight_255 = vmovq_n_s16(255);
+        const int16x8_t qv_height_min = vmovq_n_s16(height_min);
+        const int16x8_t qv_height_scale = vmovq_n_s16(height_scale);
+
         const int16x4_t height_0 = vmov_n_s16(0);
         const int16x4_t height_255 = vmov_n_s16(255);
         const int16x4_t v_height_min = vmov_n_s16(height_min);
         const int16x4_t v_height_scale = vmov_n_s16(height_scale);
 
+
         for (unsigned int y = 0; y < iys; ++y) {
             BGRColor* screen_row = screen_buffer->GetRow(y);
             const int16_t *height_row = &height_buffer[y*ixs];
 
-            for (unsigned int x = 0; x < (ixs-3); x+=4) {
+            // first loop to vectorize using neon quad
+            unsigned int x;
+            for (x = 0; x < (ixs-8); x+=8) {
+                int16x8_t h =  vld1q_s16(height_row + x);
+                h = (h - qv_height_min) >> qv_height_scale;
+                h = Clamp(h, qheight_0, qheight_255);
+
+                screen_row[x]   = GetColor(vgetq_lane_s16(h, 0));
+                screen_row[x+1] = GetColor(vgetq_lane_s16(h, 1));
+                screen_row[x+2] = GetColor(vgetq_lane_s16(h, 2));
+                screen_row[x+3] = GetColor(vgetq_lane_s16(h, 3));
+                screen_row[x+4] = GetColor(vgetq_lane_s16(h, 4));
+                screen_row[x+5] = GetColor(vgetq_lane_s16(h, 5));
+                screen_row[x+6] = GetColor(vgetq_lane_s16(h, 6));
+                screen_row[x+7] = GetColor(vgetq_lane_s16(h, 7));
+            }
+            // next to vectorize using neon
+            for (; x < (ixs-4); x+=4) {
                 int16x4_t h =  vld1_s16(height_row + x);
                 h = (h - v_height_min) >> v_height_scale;
                 h = Clamp(h, height_0, height_255);
@@ -729,8 +754,14 @@ public:
                 screen_row[x+1] = GetColor(vget_lane_s16(h, 1));
                 screen_row[x+2] = GetColor(vget_lane_s16(h, 2));
                 screen_row[x+3] = GetColor(vget_lane_s16(h, 3));
+            }
+            // end without vector
+            for (; x < ixs; ++x) {
+                int16_t h =  *(height_row + x);
+                h = ((unsigned)(h - height_min)) >> height_scale;
+                h = Clamp<int16_t>(h, 0, 255);
 
-                assert(x+3 < ixs);
+                screen_row[x]   = GetColor(h);
             }
         }
     }
@@ -846,6 +877,62 @@ public:
         }
     }
 
+    void DrawIsoLine() {
+        const double current_scale = MapWindow::zoom.Scale() / DISTANCEMODIFY;
+        if (current_scale >= 2000 || current_scale <= 100) {
+            // No Iso line if zoom are too small or too huge
+            return;
+        }
+
+        struct {
+            uint8_t operator()(int16_t height) {
+                return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 6; // 64m, can't be smaller to avoid uint8_t overflow.
+                // return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 7; // 128m
+                // return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 8; // 256m
+            }
+        } IsoBand;
+
+        if(!prev_iso_band) {
+            // array used to store iso band value of previous row
+            prev_iso_band = std::make_unique<uint8_t[]>(ixs);
+        }
+        if(!current_iso_band) {
+            // array used to store iso band value of current row
+            //   this become previous row in next loop.
+            current_iso_band = std::make_unique<uint8_t[]>(ixs);
+        }
+
+        // initialize previous row with first height row
+        std::transform(height_buffer, height_buffer+ixs, prev_iso_band.get(), IsoBand);
+
+        for (unsigned int y = 1; y < iys; ++y) {
+            BGRColor* screen_row = screen_buffer->GetRow(y);
+
+            const int16_t *height_row = &height_buffer[y*ixs];
+
+            // iso band value of first column
+            prev_iso_band[0] = IsoBand(height_row[0]);
+
+            for (unsigned int x = 1; x < ixs; ++x) {
+                // iso band value of current pixel
+                const uint8_t& h = current_iso_band[x] = IsoBand(height_row[x]);
+
+                const uint8_t& h1 = prev_iso_band[x-1]; // top left value
+                const uint8_t& h2 = prev_iso_band[x]; // top value
+                const uint8_t& h3 = current_iso_band[x-1]; // left value
+
+                if (h != h1 || h != h2 || h != h3) {
+                    // if one of this 4 point is in other iso band ( upper or lower than iso line )
+                    // this point is a iso line.
+                    screen_row[x] = GetIsoLineColor();
+                }
+            }
+            // swap prev & current iso band value
+            // current become prev and old prev will be used for store value of next row.
+            std::swap(prev_iso_band, current_iso_band);
+        }
+    }
+
 
 private:
 
@@ -859,14 +946,16 @@ private:
         color_table[mag + 64][height] = std::forward<BGRColor>(color);
     }
 
-    static constexpr BGRColor GetInvalidColor() {
-#ifdef DITHER
-        return BGRColor(255, 255, 255); // White terrain invalid
-#else
-        return BGRColor(194, 223, 197); // LCD green terrain invalid
-#endif
+    static BGRColor GetInvalidColor() {
+      return IsDithered()
+                 ? BGRColor(255, 255, 255) // White terrain invalid
+                 : BGRColor(194, 223, 197); // LCD green terrain invalid
     }
 
+
+    static constexpr BGRColor GetIsoLineColor() {
+        return BGRColor(100, 70, 26); // brown : #64461a
+    }
 
 public:
     void ColorTable() {
@@ -879,6 +968,7 @@ public:
             // no need to update the color table
             return;
         }
+
         lastColorRamp = color_ramp;
         last_height_scale = height_scale;
         last_terrain_whiteness = TerrainWhiteness;
@@ -923,10 +1013,6 @@ public:
                 }
             }
         }
-
-#ifdef DRAW_TIMER
-        StartupStore("Draw Terrain : updated ColorTable");
-#endif
     }
 
     void Draw(LKSurface& Surface, const RECT& rc) {
@@ -1054,25 +1140,12 @@ _redo:
         thighlight = terrain_highlight[TerrainRamp];
 
         // step 0: fill height buffer
-#ifdef DRAW_TIMER
-        uint64_t height_start=MonotonicClockUS();
-#endif
         trenderer->Height({rc.left, rc.top}, _Proj);
 
-#ifdef DRAW_TIMER
-        uint64_t height_time=MonotonicClockUS()-height_start;
-        StartupStore(_T("Draw Terrain : height time        < %u.%u ms >\n"),(int)height_time/1000, (int)height_time%1000);
-#endif
         // step 1: update color table
         //   need to be done after fill height buffer because depends of min 
         //   and max height of terrain
         trenderer->ColorTable();
-
-        // step 3: calculate derivatives of height buffer
-        // step 4: calculate illumination and colors
-#ifdef DRAW_TIMER
-        uint64_t slope_start=MonotonicClockUS();
-#endif
 
         // step 3: calculate derivatives of height buffer
         // step 4: calculate illumination and colors
@@ -1084,22 +1157,14 @@ _redo:
             const int sz = (255 * fastsine(fudgeelevation));
 
             trenderer->Slope_shading(sx, sy, sz);
-
-#ifdef DRAW_TIMER
-            uint64_t slope_time=MonotonicClockUS()-slope_start;
-            StartupStore(_T("Draw Terrain : slope shading time < %u.%u ms >\n"),(int)slope_time/1000, (int)slope_time%1000);
-#endif
-
         } else {
             trenderer->Slope();
-
-#ifdef DRAW_TIMER
-            uint64_t slope_time=MonotonicClockUS()-slope_start;
-            StartupStore(_T("Draw Terrain : slope              < %u.%u ms >\n"),(int)slope_time/1000, (int)slope_time%1000);
-#endif
         }
 
         trenderer->FixOldMapWater();
+        if(IsoLine_Config) {
+            trenderer->DrawIsoLine();
+        }
     }
     // step 5: draw
     trenderer->Draw(Surface, rc);
