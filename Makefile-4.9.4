@@ -647,7 +647,7 @@ endif
 CPPFLAGS += -DPOCO_STATIC
 
 CXXFLAGS	:= -std=gnu++0x $(OPTIMIZE) $(PROFILE)
-CFLAGS		:= -std=gnu89 $(OPTIMIZE) $(PROFILE)
+CFLAGS		:= $(OPTIMIZE) $(PROFILE)
 
 ####### linker configuration
 LDLIBS :=
@@ -1096,6 +1096,7 @@ TERRAIN	:=\
 	$(TER)/RasterTerrain.cpp	\
 	$(TER)/RAW.cpp	\
 	$(TER)/STScreenBuffer.cpp \
+	$(TER)/STHeightBuffer.cpp \
 
 TOPOL	:=\
 	$(TOP)/Topology.cpp		\
@@ -1113,7 +1114,6 @@ MAPDRAW	:=\
 	$(MAP)/MarkLocation.cpp		\
 	$(MAP)/OpenCloseTopology.cpp		\
 	$(MAP)/SetTopologyBounds.cpp		\
-	$(MAP)/TopoMarks.cpp		\
 	$(MAP)/ZoomTopology.cpp		\
 
 UTILS	:=\
@@ -1320,6 +1320,7 @@ SRC_FILES :=\
 	$(SRC)/LKInstall.cpp 		\
 	$(SRC)/LKLanguage.cpp		\
 	$(SRC)/LKObjects.cpp \
+	$(SRC)/LKProfiles.cpp\
 	$(SRC)/LKProfileInitRuntime.cpp\
 	$(SRC)/LKProfileLoad.cpp\
 	$(SRC)/LKProfileResetDefault.cpp\
@@ -1368,6 +1369,7 @@ SRC_FILES :=\
 	$(SRC)/units.cpp \
 	$(SRC)/Utils.cpp		\
 	$(SRC)/WindowControls.cpp \
+	$(SRC)/Geographic/GeoPoint.cpp \
 	\
 	$(LKINTER) \
 	$(LIBRARY) \
