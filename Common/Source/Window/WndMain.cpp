@@ -141,18 +141,13 @@ void BeforeShutdown(void) {
 
   LockTerrainDataGraphics();
   CloseTopology();
-  #if USETOPOMARKS
-  TopologyCloseMarks();
-  #endif
   CloseTerrainRenderer();
   RasterTerrain::CloseTerrain();
   UnlockTerrainDataGraphics();
 
   LiveTrackerShutdown();
-
-#ifndef NO_DATARECORDER
   CloseFlightDataRecorder();
-#endif
+
   // Stop COM devices
   StartupStore(TEXT(". Stop COM devices%s"),NEWLINE);
   devCloseAll();

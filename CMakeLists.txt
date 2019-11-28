@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.6.0)
 
 project(assembler C CXX ASM)
 
@@ -65,14 +65,41 @@ ExternalProject_Add (
 ExternalProject_Get_Property(boost source_dir)
 set(BOOST_INCLUDE ${source_dir})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -ffast-math -fopenmp")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wparentheses -Wuninitialized -Wredundant-decls")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_IOSTREAM -DBOOST_NO_IOSFWD -DBOOST_NO_STRINGSTREAM -DBOOST_NO_WSTREAMBUF ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__linux__ -DHAVE_POSIX -DANDROID -D__STDC_FORMAT_MACROS ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_OPENGL -DHAVE_GLES -DGL_GLEXT_PROTOTYPES -DUSE_EGL")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPOCO_NO_UNWINDOWS -DPOCO_ANDROID ")
+add_definitions(
+	-DBOOST_NO_IOSTREAM
+	-DBOOST_NO_IOSFWD
+	-DBOOST_NO_STRINGSTREAM
+	-DBOOST_NO_WSTREAMBUF
+	-D__linux__
+	-DHAVE_POSIX
+	-DANDROID
+	-D__STDC_FORMAT_MACROS
+	-DENABLE_OPENGL
+	-DHAVE_GLES
+	-DGL_GLEXT_PROTOTYPES
+	-DUSE_EGL
+	-DPOCO_NO_UNWINDOWS
+	-DPOCO_ANDROID
+)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu89 ")
+
+list(APPEND	BUILD_FLAGS
+	-Werror
+	-Wall
+	-ffast-math
+	-fopenmp
+	-Wparentheses
+	-Wuninitialized
+	-Wredundant-decls
+)
+string(REPLACE ";" " " BUILD_FLAGS "${BUILD_FLAGS}")
+
+set(CMAKE_C_FLAGS             "${CMAKE_C_FLAGS} ${BUILD_FLAGS} ")
+set(CMAKE_CXX_FLAGS           "${CMAKE_CXX_FLAGS} ${BUILD_FLAGS} ")
+
+
+add_subdirectory( Common/Source/Library/poco lib_poco )
+add_subdirectory( Common/Source/Library/glutess lib_glutess )
 
 add_library( LK8000 SHARED
     Common/Source/xcs/Android/Assert.cpp
@@ -250,6 +277,7 @@ add_library( LK8000 SHARED
     Common/Source/LKInstall.cpp
     Common/Source/LKLanguage.cpp
     Common/Source/LKObjects.cpp
+	Common/Source/LKProfiles.cpp
     Common/Source/LKProfileInitRuntime.cpp
     Common/Source/LKProfileLoad.cpp
     Common/Source/LKProfileResetDefault.cpp
@@ -548,6 +576,7 @@ add_library( LK8000 SHARED
     Common/Source/Terrain/RasterTerrain.cpp
     Common/Source/Terrain/RAW.cpp
     Common/Source/Terrain/STScreenBuffer.cpp
+    Common/Source/Terrain/STHeightBuffer.cpp
 
     Common/Source/Topology/Topology.cpp
     Common/Source/Topology/ShapeSpecialRenderer.cpp
@@ -559,7 +588,6 @@ add_library( LK8000 SHARED
     Common/Source/MapDraw/MarkLocation.cpp
     Common/Source/MapDraw/OpenCloseTopology.cpp
     Common/Source/MapDraw/SetTopologyBounds.cpp
-    Common/Source/MapDraw/TopoMarks.cpp
     Common/Source/MapDraw/ZoomTopology.cpp
 
     Common/Source/utils/fileext.cpp
@@ -735,49 +763,9 @@ add_library( LK8000 SHARED
     Common/Source/Library/zzip/plugin.c
     Common/Source/Library/zzip/zip.c
 
-    Common/Source/Library/poco/Debugger.cpp
-    Common/Source/Library/poco/Bugcheck.cpp
-    Common/Source/Library/poco/ErrorHandler.cpp
-    Common/Source/Library/poco/Event.cpp
-    Common/Source/Library/poco/NamedEvent.cpp
-    Common/Source/Library/poco/Exception.cpp
-    Common/Source/Library/poco/Mutex.cpp
-    Common/Source/Library/poco/NamedMutex.cpp
-    Common/Source/Library/poco/Runnable.cpp
-    Common/Source/Library/poco/RWLock.cpp
-    Common/Source/Library/poco/Thread.cpp
-    Common/Source/Library/poco/ThreadLocal.cpp
-    Common/Source/Library/poco/ThreadTarget.cpp
-    Common/Source/Library/poco/Timestamp.cpp
-    Common/Source/Library/poco/Timespan.cpp
-    Common/Source/Library/poco/UnicodeConverter.cpp
-    Common/Source/Library/poco/UTF8Encoding.cpp
-    Common/Source/Library/poco/UTF16Encoding.cpp
-    Common/Source/Library/poco/TextEncoding.cpp
-    Common/Source/Library/poco/ASCIIEncoding.cpp
-    Common/Source/Library/poco/Latin1Encoding.cpp
-    Common/Source/Library/poco/Latin9Encoding.cpp
-    Common/Source/Library/poco/Windows1252Encoding.cpp
-    Common/Source/Library/poco/TextIterator.cpp
-    Common/Source/Library/poco/TextConverter.cpp
-    Common/Source/Library/poco/Ascii.cpp
-    Common/Source/Library/poco/AtomicCounter.cpp
-    Common/Source/Library/poco/RefCountedObject.cpp
-    Common/Source/Library/poco/Condition.cpp
-
-    Common/Source/Library/glutess/dict.c
-    Common/Source/Library/glutess/geom.c
-    Common/Source/Library/glutess/memalloc.c
-    Common/Source/Library/glutess/mesh.c
-    Common/Source/Library/glutess/normal.c
-    Common/Source/Library/glutess/priorityq.c
-    Common/Source/Library/glutess/render.c
-    Common/Source/Library/glutess/sweep.c
-    Common/Source/Library/glutess/tess.c
-    Common/Source/Library/glutess/tessellate.c
-    Common/Source/Library/glutess/tessmono.c
-
     Common/Source/Sound/Android/Sound.cpp
+
+    Common/Source/Geographic/GeoPoint.cpp
 
     Common/Source/Resource/resource_data.S
     Common/Source/Resource/resource_xml.S
@@ -817,6 +805,18 @@ target_include_directories( LK8000 PRIVATE
     ${GEOGRAPHIC_INCLUDE}
 )
 
+target_compile_features( LK8000 PRIVATE
+	cxx_constexpr
+	cxx_auto_type
+	cxx_deleted_functions
+	cxx_defaulted_functions
+	cxx_nullptr
+	cxx_override
+	cxx_range_for
+	cxx_rvalue_references
+	cxx_static_assert
+)
+
 add_dependencies(LK8000 generate-GeographicLib)
 add_dependencies(LK8000 boost)
 
@@ -828,6 +828,8 @@ find_library( egl-lib EGL )
 
 target_link_libraries(
     LK8000
+	LK8000_POCO
+	LK8000_GLUTESS
     ${GEOGRAPHIC_LIB}
     ${android-lib}
     ${log-lib}

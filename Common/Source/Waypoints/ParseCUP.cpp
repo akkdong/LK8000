@@ -75,8 +75,6 @@ std::vector<tstring> CupStringToFieldArray(const TCHAR *row) {
 //#define CUPDEBUG
 bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 {
-  #define   MAXBUF 128
-  TCHAR Buffer[MAXBUF];
   int flags=0;
   bool ishome=false; // 100310
 
@@ -114,8 +112,7 @@ bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 
 
   // ---------------- LATITUDE  ------------------
-  _tcsncpy(Buffer,Entries[3].c_str(),MAXBUF );
-  Temp->Latitude = CUPToLat( Buffer );
+  Temp->Latitude = CUPToLat(Entries[3].c_str() );
 
   if((Temp->Latitude > 90) || (Temp->Latitude < -90)) {
 	return false;
@@ -126,8 +123,10 @@ bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 
 
   // ---------------- LONGITUDE  ------------------
-  _tcsncpy(Buffer,Entries[4].c_str(),MAXBUF );
-  Temp->Longitude  = CUPToLon( Buffer);
+  Temp->Longitude  = CUPToLon(Entries[4].c_str());
+  #ifdef CUPDEBUG
+  StartupStore(_T("   CUP LONGITUDE=<%f>%s"),Temp->Longitude,Entries[4].c_str());
+  #endif
   if((Temp->Longitude  > 180) || (Temp->Longitude  < -180)) {
 	return false;
   }
@@ -137,8 +136,7 @@ bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 
 
   // ---------------- ELEVATION  ------------------
-  _tcsncpy(Buffer,Entries[5].c_str(),MAXBUF );
-  Temp->Altitude = ReadAltitude(Buffer);
+  Temp->Altitude = ReadAltitude(Entries[5].c_str());
   #ifdef CUPDEBUG
   StartupStore(_T("   CUP ELEVATION=<%f>%s"),Temp->Altitude,NEWLINE);
   #endif
@@ -186,8 +184,7 @@ bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 	Temp->RunwayLen = -1;
   else
   {
-    _tcsncpy(Buffer,Entries[8].c_str(),MAXBUF );
-    Temp->RunwayLen = (int)ReadLength(Buffer);
+    Temp->RunwayLen = (int)ReadLength(Entries[8].c_str());
   }
   #ifdef CUPDEBUG
   StartupStore(_T("   CUP RUNWAY LEN=<%d>%s"),Temp->RunwayLen,NEWLINE);
@@ -232,11 +229,10 @@ bool ParseCUPWayPointString(const TCHAR *String,WAYPOINT *Temp)
 
 
 
-double ReadLength(TCHAR *temp)
+double ReadLength(const TCHAR *temp)
 {
-  TCHAR *stop=temp;
-  double len;
-  len = StrToDouble(temp, &stop);
+  const TCHAR *stop=temp;
+  double len = StrToDouble(temp, &stop);
   if (temp == stop) {		// error at begin
 	len=-9999;
 	return len;

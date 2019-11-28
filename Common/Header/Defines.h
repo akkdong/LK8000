@@ -97,7 +97,7 @@
 
 #define LKFORK		"LK8000"
 #define LKVERSION	"7"
-#define LKRELEASE	"1c"
+#define LKRELEASE	"1f"
 
 #define LKDATADIR	"LK8000"
 #define LKPROFILE	"DEFAULT_PROFILE.prf"
@@ -190,10 +190,6 @@
  */
 #define LKF_RECENTS	"History.txt"
 #define LKF_DEFAULTASK	"Default.lkt"
-#if USETOPOMARKS
- #define LKF_MARKS	"Markers.txt"
- #define LKF_SMARKS	"Markers"
-#endif
 #define LKF_FLARMIDS	"IDFLARM.TXT"
 #define LKF_RUNLOG	"RUNTIME.log"
 #define LKF_FAILLOG	"FAILURES.log"
@@ -916,11 +912,11 @@ static const double PI = (4*atan(1));
 #define TOKPH   (double)3.6
 
 // meters to.. conversion
-#define TONAUTICALMILES (double)0.00053996
-#define TOMILES         (double)0.00062137
-#define TOKILOMETER     (double)0.001
-#define TOFEET          (double)3.281
-#define TOMETER         (double)1.0
+#define TONAUTICALMILES (1.0 / 1852.0)
+#define TOMILES         (1.0 / 1609.344)
+#define TOKILOMETER     (0.001)
+#define TOFEET          (1.0 / 0.3048)
+#define TOMETER         (1.0)
 
 // Pressures
 #define PRESSURE_STANDARD	1013.25		// hPa

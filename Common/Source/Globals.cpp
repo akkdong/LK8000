@@ -8,7 +8,6 @@
 
 #define STATIC_GLOBALS
 #include "externs.h"
-#define STATIC_PGLOBALS
 #include "LKProfiles.h"
 #include "LKMapWindow.h"
 #include "Modeltype.h"
@@ -265,7 +264,7 @@ void Globals_Init(void) {
   SonarWarning_Config=1;
   Shading=1;
   Shading_Config=1;
-  IsoLine_Config=true;
+  IsoLine_Config=false;
 
   for (i=0; i<10; i++) ConfMP[i]=1;
 

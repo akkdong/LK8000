@@ -5,7 +5,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'io.fabric.tools:gradle:1.31.0'
+        classpath 'io.fabric.tools:gradle:1.31.2'
     }
 }
 
@@ -19,12 +19,14 @@ repositories {
 
 android {
     compileSdkVersion 28
+    ndkVersion "20.1.5948944"
+
     defaultConfig {
         applicationId "org.lk8000"
         minSdkVersion 16
         targetSdkVersion 28
-        versionCode 49
-        versionName "7.1c"
+        versionCode 52
+        versionName "7.1f"
         setProperty("archivesBaseName", "LK8000-$versionName")
         manifestPlaceholders = [
                 applicationLabel: "@string/app_name",
@@ -137,6 +139,8 @@ dependencies {
     implementation 'com.github.ytai.ioio:IOIOLibAndroidAccessory:5.07'
     implementation 'com.github.ytai.ioio:IOIOLibAndroidDevice:5.07'
     implementation 'com.github.felHR85:UsbSerial:6.0.5'
+
+    implementation 'com.onyx.android.sdk:epdcontroller:0.1.0'
 }
 
 crashlytics {

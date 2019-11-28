@@ -9,7 +9,8 @@
 #include "externs.h"
 #include "Terrain.h"
 #include "RasterTerrain.h"
-#include "STScreenBuffer.h"
+#include "Terrain/STScreenBuffer.h"
+#include "Terrain/STHeightBuffer.h"
 #include "RGB.h"
 #include "Multimap.h"
 #include "../Draw/ScreenProjection.h"
@@ -182,6 +183,8 @@ inline T TerrainShading(const int16_t illum, const T& color) {
 class TerrainRenderer {
     TerrainRenderer(const TerrainRenderer &) = delete; // disallowed
     TerrainRenderer &operator=(const TerrainRenderer &) = delete; // disallowed
+    TerrainRenderer(TerrainRenderer &&) = delete; // disallowed
+    TerrainRenderer &operator=(TerrainRenderer &&) = delete; // disallowed
 public:
 
     explicit TerrainRenderer(const RECT& rc) : _dirty(true), _ready(), screen_buffer(), height_buffer(), color_table()  {
@@ -233,62 +236,45 @@ public:
            5    3    2    192    144     64  48     3072        27648
          */
 
+        try {
 
+            const int res_x = iround((rc.right - rc.left) * oversampling / dtquant);
+            const int res_y = iround((rc.bottom - rc.top) * oversampling / dtquant);
 
+            screen_buffer = std::make_unique<CSTScreenBuffer>(res_x, res_y);
 
-        const int res_x = iround((rc.right - rc.left) * oversampling / dtquant);
-        const int res_y = iround((rc.bottom - rc.top) * oversampling / dtquant);
+            const size_t ixs = screen_buffer->GetCorrectedWidth() / oversampling;
+            const size_t iys = screen_buffer->GetHeight() / oversampling;
 
-        screen_buffer = new (std::nothrow) CSTScreenBuffer(res_x, res_y);
-        if(!screen_buffer) {
+            height_buffer = std::make_unique<CSTHeightBuffer>(ixs, iys);
+
+            auto_brightness = 218;
+
+            // Reset this, so ColorTable will reload colors
+            lastColorRamp = nullptr;
+            last_height_scale = 0;
+            last_realscale = 0;
+
+            // this is validating terrain construction
+            _ready = true;
+
+        } catch (std::bad_alloc& e) {
+
+            screen_buffer = nullptr;
+            height_buffer = nullptr;
+            _ready = false;
+
+            const tstring error = to_tstring(e.what());
+            StartupStore(_T("TerrainRenderer : %s"), error.c_str());
             OutOfMemory(_T(__FILE__), __LINE__);
             ToggleMultimapTerrain();
-            return;
         }
-
-        ixs = screen_buffer->GetCorrectedWidth() / oversampling;
-        iys = screen_buffer->GetHeight() / oversampling;
-
-        TESTBENCH_DO_ONLY(5,StartupStore(_T("... Terrain quant=%d ixs=%d iys=%d  TOTAL=%d\n"),dtquant,ixs,iys,ixs*iys));
-
-        height_buffer = (int16_t*) malloc(sizeof(int16_t)*ixs * iys);
-        if (!height_buffer) {
-            StartupStore(_T("------ TerrainRenderer: malloc(%u) failed!%s"), (unsigned)(sizeof(int16_t)*ixs*iys), NEWLINE);
-            OutOfMemory(_T(__FILE__), __LINE__);
-            //
-            // We *must* disable terrain at this point.
-            //
-            ToggleMultimapTerrain();
-            return;
-        }
-#if TESTBENCH
-        else {
-            StartupStore(_T(". TerrainRenderer: malloc(%u) ok"), (unsigned)(sizeof(int16_t)*ixs*iys));
-        }
-#endif
-
-        auto_brightness = 218;
-
-        // Reset this, so ColorTable will reload colors
-        lastColorRamp = NULL;
-        last_height_scale = 0;
-        last_realscale = 0;
-
-        // this is validating terrain construction
-        _ready = true;
     }
 
     ~TerrainRenderer() {
 #if TESTBENCH
         StartupStore(_T(".... Deinit TerrainRenderer\n"));
 #endif
-        if (height_buffer) {
-            free(height_buffer);
-            height_buffer = NULL;
-        }
-
-        delete screen_buffer;
-        screen_buffer = nullptr;
     }
 
     void SetDirty() {
@@ -311,11 +297,8 @@ private:
     bool _dirty; // indicate screen_buffer is up-to-date
     bool _ready; // indicate renderer is fully initialised
 
-    unsigned int ixs, iys; // screen dimensions in coarse pixels
     unsigned int dtquant;
     unsigned int epx; // step size used for slope calculations
-
-    CSTScreenBuffer *screen_buffer;
 
     double pixelsize_d;
 
@@ -326,10 +309,10 @@ private:
 #else
     static constexpr int oversampling = 1; //no oversampling if no "Blur"
 #endif
-
-    int16_t *height_buffer;
-    std::unique_ptr<uint8_t[]> prev_iso_band;
-    std::unique_ptr<uint8_t[]> current_iso_band;
+    std::unique_ptr<CSTScreenBuffer> screen_buffer;
+    std::unique_ptr<CSTHeightBuffer> height_buffer;
+    std::unique_ptr<int16_t[]> prev_iso_band;
+    std::unique_ptr<int16_t[]> current_iso_band;
 
     BGRColor color_table[128][256];
 
@@ -348,6 +331,10 @@ private:
 public:
 
     bool DoShading() const {
+        assert(height_buffer && height_buffer->GetBuffer());
+
+        const size_t ixs = height_buffer->GetWidth();
+        const size_t iys = height_buffer->GetHeight();
 
         if (epx > min(ixs, iys) / 4) {
             return false;
@@ -370,69 +357,54 @@ public:
      * Fill height Buffer with according to map projection
      * @offset : {top, left} coordinate of Terrain Rendering Rect relative to DrawRect
      */
-    void Height(const POINT& offset, const ScreenProjection& _Proj) {
+    void Height(const RasterPoint& offset, const ScreenProjection& _Proj) {
+        assert(height_buffer && height_buffer->GetBuffer());
+
         RasterTerrain::Lock();
         RasterMap* DisplayMap = RasterTerrain::TerrainMap;
-        assert(DisplayMap);
-        if(!DisplayMap) {
+        assert(DisplayMap && DisplayMap->isMapLoaded());
+        if(!DisplayMap && DisplayMap->isMapLoaded()) {
             return;
         }
-        LKASSERT(DisplayMap->isMapLoaded());
-
-        double X, Y;
 
         const int X0 = dtquant / 2;
         const int Y0 = dtquant / 2;
-        const int X1 = X0 + dtquant * ixs;
-        const int Y1 = Y0 + dtquant * iys;
+        const int X1 = X0 + dtquant * height_buffer->GetWidth();
+        const int Y1 = Y0 + dtquant * height_buffer->GetHeight();
 
-        double pixelDX, pixelDY;
-
-        RasterPoint Pt = {
-            (X0 + X1) / 2,
-            (Y0 + Y1) / 2
+        const RasterPoint ScreenCenter = {
+                (X0 + X1) / 2,
+                (Y0 + Y1) / 2
         };
-        _Proj.Screen2LonLat(Pt, X, Y);
-        double xmiddle = X;
-        double ymiddle = Y;
+        const GeoPoint GeoCenter = _Proj.ToGeoPoint(ScreenCenter);
 
-        Pt.x = (X0 + X1) / 2 + dtquant;
-        Pt.y = (Y0 + Y1) / 2;
-        _Proj.Screen2LonLat(Pt, X, Y);
+        const RasterPoint ScreenNearby = {
+                ScreenCenter.x + static_cast<PixelScalar>(dtquant),
+                ScreenCenter.y + static_cast<PixelScalar>(dtquant)
+        };
+        const GeoPoint GeoNearby = _Proj.ToGeoPoint(ScreenNearby);
 
-        double dX = std::abs(xmiddle - X);
-        DistanceBearing(ymiddle, xmiddle, Y, X, &pixelDX, NULL);
-
-        Pt.x = (X0 + X1) / 2;
-        Pt.y = (Y0 + Y1) / 2 + dtquant;
-        _Proj.Screen2LonLat(Pt, X, Y);
-        double dY = std::abs(ymiddle - Y);
-        DistanceBearing(ymiddle, xmiddle, Y, X, &pixelDY, NULL);
-
-        pixelsize_d = sqrt((pixelDX * pixelDX + pixelDY * pixelDY) / 2.0);
-
-        // OK, ready to start loading height
+        pixelsize_d = GeoCenter.Distance(GeoNearby) / 2.0;
 
         // set resolution
-        DisplayMap->SetFieldRounding(dX/3, dY/3);
-        epx = DisplayMap->GetEffectivePixelSize(&pixelsize_d, ymiddle, xmiddle);
-        epx = std::max(4u, (epx / 4 ) * 4);
+        DisplayMap->SetFieldRounding(std::abs(GeoCenter.longitude - GeoNearby.longitude)/3,
+                                     std::abs(GeoCenter.latitude - GeoNearby.latitude)/3);
 
+        epx = DisplayMap->GetEffectivePixelSize(&pixelsize_d, GeoCenter.latitude, GeoCenter.longitude);
+        epx = std::max(4u, (epx / 4u ) * 4u); // "epx" must be divisible by 4 for compatibility with ARM NEON vectorized shadding algorithm
 
-        POINT orig = MapWindow::GetOrigScreen();
-        orig.x -= offset.x;
-        orig.y -= offset.y;
+        RasterPoint orig = RasterPoint(MapWindow::GetOrigScreen()) - offset;
 
         if(DisplayMap->interpolate()) {
 
             FillHeightBuffer(X0 - orig.x, Y0 - orig.y, X1 - orig.x, Y1 - orig.y,
-                    [DisplayMap](const double &lat, const double &lon){
+                    [DisplayMap](const double &lat, const double &lon) {
                         return DisplayMap->GetFieldInterpolate(lat,lon);
                     });
         } else {
 
             FillHeightBuffer(X0 - orig.x, Y0 - orig.y, X1 - orig.x, Y1 - orig.y,
-                    [DisplayMap](const double &lat, const double &lon){
+                    [DisplayMap](const double &lat, const double &lon) {
                         return DisplayMap->GetFieldFine(lat,lon);
                     });
         }
@@ -443,12 +415,12 @@ public:
     /**
      * Attention ! never call this without check if map is loaded.
      *
-     * template is needed for avoid to test if interpolation is needed for each pixel.
+     * template avoid to test if interpolation is needed for each pixel.
      */
     template<typename GetHeight_t>
     void FillHeightBuffer(const int X0, const int Y0, const int X1, const int Y1, GetHeight_t GetHeight) {
         // fill the buffer
-        LKASSERT(height_buffer != NULL);
+        assert(height_buffer && height_buffer->GetBuffer());
 
         const double PanLatitude = MapWindow::GetPanLatitude();
         const double PanLongitude = MapWindow::GetPanLongitude();
@@ -467,24 +439,30 @@ public:
         int16_t _height_min = std::numeric_limits<int16_t>::max();
         int16_t _height_max = std::numeric_limits<int16_t>::min();
 
+        const size_t col_count = height_buffer->GetWidth();
+        const size_t row_count = height_buffer->GetHeight();
+
+
 #if defined(_OPENMP)
         #pragma omp parallel for reduction(max : _height_max) reduction(min : _height_min)
 #endif
-        for (unsigned int iy=0; iy < iys; iy++) {
+        for (size_t iy = 0; iy < row_count; ++iy) {
             const int y = Y0 + (iy*dtquant);
             const double ac1 = PanLatitude - y*ac3;
             const double cc1 = y * ac2;
 
-            for (unsigned int ix=0; ix < ixs; ix++) {
+            int16_t *height_row = height_buffer->GetRow(iy);
+
+            for (size_t ix = 0; ix < col_count; ++ix) {
                 const int x = X0 + (ix*dtquant);
                 const double Y = ac1 - x*ac2;
                 const double X = PanLongitude + (invfastcosine(Y) * ((x * ac3) - cc1));
 
-                int16_t& hDst = height_buffer[iy*ixs+ix];
+                int16_t& hDst = height_row[ix];
 
                 /*
                  * Terrain height can be negative.
-                 * do not clip height to 0 here, otherwise all height below 0 
+                 * do not clip height to 0 here, otherwise all height below 0
                  * will be painted like sea if topology does not contains coast_area
                  *
                  * all height will be sifted by #height_min in #TerrainRenderer::Slope method for ColorRamp lookup.
@@ -521,13 +499,10 @@ public:
         while((height_span >> height_scale) >= 255) {
           ++height_scale;
         }
-
-//        StartupStore(_T("... MinAlt=%d MaxAlt=%d height_scale=%d\n"),height_min, height_max, height_scale);
-
     }
 
 
-#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(OPENVARIO) 
+#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(OPENVARIO)
 
     // JMW: if zoomed right in (e.g. one unit is larger than terrain
     // grid), then increase the step size to be equal to the terrain
@@ -536,14 +511,11 @@ public:
     // previously.  for large zoom levels, epx=1
 
     void Slope_shading(const int sx, const int sy, const int sz) {
+        assert(height_buffer && height_buffer->GetBuffer());
+        assert(screen_buffer && screen_buffer->GetBuffer());
 
-        LKASSERT(height_buffer != NULL);
-        if(!height_buffer) {
-            return;
-        }
-        if (!screen_buffer->GetBuffer()) {
-            return;
-        }
+        const size_t ixs = height_buffer->GetWidth();
+        const size_t iys = height_buffer->GetHeight();
 
         const int hscale = std::max<int>(1, pixelsize_d);
 
@@ -559,7 +531,7 @@ public:
                 static_cast<float32_t>(epx + ixs - 1),
                 static_cast<float32_t>(epx + ixs - 2),
                 static_cast<float32_t>(epx + ixs - 3),
-                static_cast<float32_t>(epx + ixs - 3)
+                static_cast<float32_t>(epx + ixs - 4)
         };
         const float32x4_t v_p20_right_offset = vld1q_f32(p20_right_offset);
 
@@ -584,9 +556,9 @@ public:
             const unsigned prev_row_index =  (y < epx) ? 0 : y - epx;
             const unsigned next_row_index =  (y + epx >= iys) ? iys - 1 : y + epx;
 
-            const int16_t* prev_row = &height_buffer[prev_row_index * ixs];
-            const int16_t* curr_row = &height_buffer[y * ixs];
-            const int16_t* next_row = &height_buffer[next_row_index * ixs];
+            const int16_t* prev_row = height_buffer->GetRow(prev_row_index);
+            const int16_t* curr_row = height_buffer->GetRow(y);
+            const int16_t* next_row = height_buffer->GetRow(next_row_index);
 
             const float32_t p31 = next_row_index - prev_row_index;
             const float32_t p31s = p31 * hscale;
@@ -705,13 +677,8 @@ public:
     }
 
     void Slope() {
-        LKASSERT(height_buffer != NULL);
-        if(!height_buffer) {
-            return;
-        }
-        if (!screen_buffer->GetBuffer()) {
-            return;
-        }
+        assert(height_buffer && height_buffer->GetBuffer());
+        assert(screen_buffer && screen_buffer->GetBuffer());
 
         const int16x8_t qheight_0 = vmovq_n_s16(0);
         const int16x8_t qheight_255 = vmovq_n_s16(255);
@@ -723,10 +690,12 @@ public:
         const int16x4_t v_height_min = vmov_n_s16(height_min);
         const int16x4_t v_height_scale = vmov_n_s16(height_scale);
 
+        const size_t ixs = height_buffer->GetWidth();
+        const size_t iys = height_buffer->GetHeight();
 
         for (unsigned int y = 0; y < iys; ++y) {
             BGRColor* screen_row = screen_buffer->GetRow(y);
-            const int16_t *height_row = &height_buffer[y*ixs];
+            const int16_t *height_row = height_buffer->GetRow(y);
 
             // first loop to vectorize using neon quad
             unsigned int x;
@@ -769,41 +738,38 @@ public:
 #else
 
     void Slope_shading(const int sx, const int sy, const int sz) {
-
-        LKASSERT(height_buffer != NULL);
-        if(!height_buffer) {
-            return;
-        }
-        if (!screen_buffer->GetBuffer()) {
-            return;
-        }
+        assert(height_buffer && height_buffer->GetBuffer());
+        assert(screen_buffer && screen_buffer->GetBuffer());
 
         const int hscale = std::max<int>(1, pixelsize_d);
+
+        const size_t ixs = height_buffer->GetWidth();
+        const size_t iys = height_buffer->GetHeight();
 
 #if defined(_OPENMP)
         #pragma omp parallel for
 #endif
-        for(unsigned y = 0; y < iys; y++) {
+        for(size_t y = 0; y < iys; y++) {
             BGRColor* screen_row = screen_buffer->GetRow(y);
 
             const unsigned prev_row_index =  (y < epx) ? 0 : y - epx;
             const unsigned next_row_index =  (y + epx >= iys) ? iys - 1 : y + epx;
 
-            const int16_t* prev_row = &height_buffer[prev_row_index * ixs];
-            const int16_t* curr_row = &height_buffer[y * ixs];
-            const int16_t* next_row = &height_buffer[next_row_index * ixs];
+            const int16_t* prev_row = height_buffer->GetRow(prev_row_index);
+            const int16_t* curr_row = height_buffer->GetRow(y);
+            const int16_t* next_row = height_buffer->GetRow(next_row_index);
 
             const float p31 = next_row_index - prev_row_index;
             const float p31s = p31 * hscale;
 
-            for (unsigned int x = 0; x < ixs; ++x) {
-                const unsigned prev_col_index =  (x < epx) ? 0 : x - epx;
-                const unsigned next_col_index =  (x + epx >= ixs) ? ixs - 1 : x + epx;
+            for (size_t x = 0; x < ixs; ++x) {
+                const size_t prev_col_index =  (x < epx) ? 0 : x - epx;
+                const size_t next_col_index =  (x + epx >= ixs) ? ixs - 1 : x + epx;
 
-                const int16_t up =     *(prev_row + x);
-                const int16_t bottom = *(next_row + x);
-                const int16_t left =   *(curr_row + prev_col_index);
-                const int16_t right =  *(curr_row + next_col_index);
+                const int16_t& up =     prev_row[x];
+                const int16_t& bottom = next_row[x];
+                const int16_t& left =   curr_row[prev_col_index];
+                const int16_t& right =  curr_row[next_col_index];
 
                 const int32_t p20 = next_col_index - prev_col_index;
                 const int32_t p22 = right - left;
@@ -823,7 +789,7 @@ public:
                 int32_t mag = (dd2 * sz + dd0 * sx + dd1 * sy) / (isqrt4(sqr_mag)|1);
                 mag = Clamp<int32_t>((mag - sz), -64, 63);
 
-                // when h is invalid, result is clamped to 255 so we have invalid terrain color 
+                // when h is invalid, result is clamped to 255 so we have invalid terrain color
                 int16_t h =  *(curr_row + x);
                 h = ((h - height_min) >> height_scale);
                 h = Clamp<int16_t>(h, 0, 255);
@@ -834,22 +800,20 @@ public:
     }
 
     void Slope() {
-        LKASSERT(height_buffer != NULL);
-        if(!height_buffer) {
-            return;
-        }
-        if (!screen_buffer->GetBuffer()) {
-            return;
-        }
+        assert(height_buffer && height_buffer->GetBuffer() );
+        assert(screen_buffer && screen_buffer->GetBuffer() );
+
+        size_t ixs = height_buffer->GetWidth();
+        size_t iys = height_buffer->GetHeight();
 
 #if defined(_OPENMP)
         #pragma omp parallel for
 #endif
-        for (unsigned int y = 0; y < iys; ++y) {
+        for (size_t y = 0; y < iys; ++y) {
             BGRColor* screen_row = screen_buffer->GetRow(y);
-            const int16_t *height_row = &height_buffer[y*ixs];
+            const int16_t *height_row = height_buffer->GetRow(y);
             
-            for (unsigned int x = 0; x < ixs; ++x) {
+            for (size_t x = 0; x < ixs; ++x) {
                 int16_t h = height_row[x];
                 h = ((h - height_min) >> height_scale);
                 h = Clamp<int16_t>(h, 0, 255);
@@ -865,9 +829,12 @@ public:
         // if topology file contain water shape this fonction have zero overhead in this case.
         if(!LKWaterTopology) {
 
+            const size_t ixs = height_buffer->GetWidth();
+            const size_t iys = height_buffer->GetHeight();
+
             for (unsigned int y = 0; y < iys; ++y) {
                 BGRColor* screen_row = screen_buffer->GetRow(y);
-                const int16_t *height_row = &height_buffer[y*ixs];
+                const int16_t *height_row = height_buffer->GetRow(y);
 
                 for (unsigned int x = 0; x < ixs; ++x) {
                     int16_t h = height_row[x];
@@ -877,56 +844,105 @@ public:
         }
     }
 
+    static
+    int16_t IsoBand(int16_t height, int zoom) {
+        //return (std::max<int16_t>(0, height)) >> 6; // 64m, can't be smaller to avoid uint8_t overflow.
+        return (std::max<int16_t>(0, height)) >> (7 + zoom); // 128m
+        // return (std::max<int16_t>(0, height)) >> 8; // 256m
+    }
+
+#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(OPENVARIO)
+
+    static
+    int16x8_t IsoBand(const int16_t* gcc_restrict height, int zoom) {
+        int16x8_t h = vld1q_s16(height);
+        h = vmaxq_s16(h, vdupq_n_s16(0));
+        return vshlq_s16(h, vdupq_n_s16(-(7U + zoom)));
+    }
+#endif
+
     void DrawIsoLine() {
+        assert(height_buffer && height_buffer->GetBuffer());
+        assert(screen_buffer && screen_buffer->GetBuffer());
+
         const double current_scale = MapWindow::zoom.Scale() / DISTANCEMODIFY;
         if (current_scale >= 2000 || current_scale <= 100) {
             // No Iso line if zoom are too small or too huge
             return;
         }
 
-        struct {
-            uint8_t operator()(int16_t height) {
-                return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 6; // 64m, can't be smaller to avoid uint8_t overflow.
-                // return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 7; // 128m
-                // return static_cast<uint16_t>(std::max<int16_t>(0, height)) >> 8; // 256m
-            }
-        } IsoBand;
+
+        int zoom = ((current_scale >= 750) ? 1 : 0 );
+
+
+        const size_t ixs = height_buffer->GetWidth();
+        const size_t iys = height_buffer->GetHeight();
 
         if(!prev_iso_band) {
             // array used to store iso band value of previous row
-            prev_iso_band = std::make_unique<uint8_t[]>(ixs);
+            prev_iso_band = std::make_unique<int16_t[]>(ixs);
         }
         if(!current_iso_band) {
             // array used to store iso band value of current row
             //   this become previous row in next loop.
-            current_iso_band = std::make_unique<uint8_t[]>(ixs);
+            current_iso_band = std::make_unique<int16_t[]>(ixs);
         }
 
         // initialize previous row with first height row
-        std::transform(height_buffer, height_buffer+ixs, prev_iso_band.get(), IsoBand);
+        std::transform(height_buffer->GetRow(0), height_buffer->GetRow(1), prev_iso_band.get(), [&](int16_t h){
+            return IsoBand(h, zoom);
+        });
 
-        for (unsigned int y = 1; y < iys; ++y) {
+        for (size_t y = 1; y < iys; ++y) {
             BGRColor* screen_row = screen_buffer->GetRow(y);
+            const int16_t *height_row = height_buffer->GetRow(y);
 
-            const int16_t *height_row = &height_buffer[y*ixs];
+
+            size_t x = 1;
+
+#if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(OPENVARIO)
+
+            static_assert((sizeof(BGRColor) == 2), "invalid color type");
+
+            const uint16x8_t line_color = vdupq_n_u16(GetIsoLineColor().value.GetNativeValue());
 
             // iso band value of first column
-            prev_iso_band[0] = IsoBand(height_row[0]);
+            vst1q_s16(&prev_iso_band[0], IsoBand(height_row, zoom));
 
-            for (unsigned int x = 1; x < ixs; ++x) {
+            for (; x < (ixs-8); x+=8) {
                 // iso band value of current pixel
-                const uint8_t& h = current_iso_band[x] = IsoBand(height_row[x]);
+                uint16x8_t h = IsoBand(&height_row[x], zoom);
+                vst1q_s16(&current_iso_band[x], h);
 
-                const uint8_t& h1 = prev_iso_band[x-1]; // top left value
-                const uint8_t& h2 = prev_iso_band[x]; // top value
-                const uint8_t& h3 = current_iso_band[x-1]; // left value
+                const int16x8_t h1 = vld1q_s16(&prev_iso_band[x-1]); // top left value
+                const int16x8_t h2 = vld1q_s16(&prev_iso_band[x]); // top value
+                const int16x8_t h3 = vld1q_s16(&current_iso_band[x-1]); // left value
 
-                if (h != h1 || h != h2 || h != h3) {
-                    // if one of this 4 point is in other iso band ( upper or lower than iso line )
-                    // this point is a iso line.
-                    screen_row[x] = GetIsoLineColor();
-                }
+                uint16x8_t mask_color = vceqq_s16(h, h1) & vceqq_s16(h, h2) & vceqq_s16(h, h3);
+                uint16x8_t mask_line = vmvnq_u16(mask_color);
+
+                uint16x8_t pixel = vld1q_u16(reinterpret_cast<uint16_t*>(&(screen_row[x].value)));
+                pixel = (pixel&mask_color) | (line_color&mask_line);
+                vst1q_u16(reinterpret_cast<uint16_t*>(&(screen_row[x])), pixel);
             }
+#else
+            // iso band value of first column
+            prev_iso_band[0] = IsoBand(height_row[0], zoom);
+#endif
+
+            for (; x < ixs; ++x) {
+                // iso band value of current pixel
+                const int16_t& h = current_iso_band[x] = IsoBand(height_row[x], zoom);
+
+                const int16_t& h1 = prev_iso_band[x-1]; // top left value
+                const int16_t& h2 = prev_iso_band[x]; // top value
+                const int16_t& h3 = current_iso_band[x-1]; // left value
+
+                // if one of this 4 point is in other iso band ( upper or lower than iso line )
+                // this point is a iso line.
+                screen_row[x] = (h != h1 || h != h2 || h != h3) ? GetIsoLineColor() : screen_row[x];
+            }
+
             // swap prev & current iso band value
             // current become prev and old prev will be used for store value of next row.
             std::swap(prev_iso_band, current_iso_band);

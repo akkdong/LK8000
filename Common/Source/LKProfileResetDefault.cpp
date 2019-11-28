@@ -7,6 +7,7 @@
 */
 
 #include "externs.h"
+#include "LKProfiles.h"
 #include "McReady.h"
 #include "Modeltype.h"
 #include "LKInterface.h"
@@ -28,7 +29,7 @@
 // * values must be normalized with ProfileAdjustVariables()
 // * Runtime values must be initialised with InitRuntime()
 //
-void LKProfileResetDefault(void) {
+void LKProfileResetDefault() {
 
   int i;
 
@@ -342,7 +343,7 @@ void LKProfileResetDefault(void) {
 
   Orbiter_Config = 1;
   Shading_Config = 1;
-  IsoLine_Config = true;
+  IsoLine_Config = false;
   OverlayClock = 0;
   UseTwoLines = 1;
   SonarWarning_Config = 1; // sonar enabled by default on reset

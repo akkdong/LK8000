@@ -5,8 +5,14 @@
 #pragma once
 #endif // _MSC_VER > 1000
 
+#include <vector>
+#include "tchar.h"
+#include "Util/tstring.hpp"
+
 class zzip_stream;
 class zzip_file_ptr;
+struct WAYPOINT;
+struct TASK_POINT;
 
 
 #define wpTerrainBoundsYes    100
@@ -37,10 +43,10 @@ void WaypointLongitudeToString(double Longitude, TCHAR *Buffer);
 void WaypointLatitudeToString(double Latitude, TCHAR *Buffer);
 void LongitudeToCUPString(double Longitude, TCHAR *Buffer);
 void LatitudeToCUPString(double Latitude, TCHAR *Buffer);
-double ReadAltitude(TCHAR *temp);
-double ReadLength(TCHAR *temp);
-double CUPToLat(TCHAR *temp);
-double CUPToLon(TCHAR *temp);
+double ReadAltitude(const TCHAR *temp);
+double ReadLength(const TCHAR *temp);
+double CUPToLat(const TCHAR *str);
+double CUPToLon(const TCHAR *str);
 int ReadWayPointFile(zzip_stream& stream, int fileformat);
 int ParseDAT(TCHAR *String,WAYPOINT *Temp);
 

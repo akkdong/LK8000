@@ -111,6 +111,7 @@ BOOL	InitInstance    ();
 
 extern void CreateCalculationThread();
 extern void PreloadInitialisation(bool ask);
+extern bool LKProfileLoad(const TCHAR *szFile);
 #ifdef PNA
 extern bool LoadModelFromProfile(void);
 #endif
@@ -235,16 +236,17 @@ bool Startup(const TCHAR* szCmdLine) {
   #if USELKASSERT
   StartupStore(TEXT(". USELKASSERT option enabled%s"),NEWLINE);
   #endif
-  
-  // This is needed otherwise LKSound will be silent until we init Globals.
-  EnableSoundModes=true;
 
-
-  LKSound(_T("LK_CONNECT.WAV"));
 
   Globals_Init();
 
   StartupLogFreeRamAndStorage();
+
+#ifdef PRELOAD_SOUND_SWITCH
+  LocalPath(defaultProfileFile, _T(LKD_CONF), _T(LKPROFILE));
+  LKProfileLoad(defaultProfileFile);
+#endif  
+  LKSound(_T("LK_CONNECT.WAV"));
 
   lscpu_init();
   if (HaveSystemInfo) {
@@ -457,9 +459,6 @@ bool Startup(const TCHAR* szCmdLine) {
   CAirspaceManager::Instance().ReadAirspaces();
   CAirspaceManager::Instance().SortAirspaces();
   OpenTopology();
-  #if USETOPOMARKS
-  TopologyInitialiseMarks();
-  #endif
 
   CreateProgressDialog(MsgToken(1808));	// Loading FLARMNET database
   OpenFLARMDetails();
@@ -531,10 +530,7 @@ bool Startup(const TCHAR* szCmdLine) {
   devInit();
 
   LiveTrackerInit();
-
-#ifndef NO_DATARECORDER
   InitFlightDataRecorder();
-#endif
 
   // re-set polar in case devices need the data
   GlidePolar::SetBallast();
